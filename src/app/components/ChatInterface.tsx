@@ -1,12 +1,101 @@
 "use client";
 
+import { useState, useRef } from "react";
 import { useChat } from "@ai-sdk/react";
 
 export default function Home() {
-  const { messages, input, handleInputChange, handleSubmit, isLoading } =
-    useChat({
-      api: "/api/chat",
-    });
+  const [file, setFile] = useState<File | null>(null);
+  const [isScanning, setIsScanning] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const {
+    messages,
+    input,
+    handleInputChange,
+    handleSubmit,
+    isLoading,
+    setMessages,
+  } = useChat({
+    api: "/api/chat",
+  });
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+      setFile(e.target.files[0]);
+    }
+  };
+
+  const handleScanFile = async () => {
+    if (!file) return;
+
+    setIsScanning(true);
+
+    try {
+      const reader = new FileReader();
+      reader.onload = async (event) => {
+        if (event.target?.result) {
+          const fileData = event.target.result as string;
+
+          const userMessage = {
+            id: Math.random().toString(),
+            role: "user" as const,
+            content: `Please scan this ${file.type} file: ${file.name} for PII.`,
+          };
+
+          setMessages([...messages, userMessage]);
+
+          const response = await fetch("/api/chat", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              messages: [...messages, userMessage],
+              tool: {
+                name: "scanForPII",
+                arguments: JSON.stringify({
+                  fileData,
+                  fileName: file.name,
+                  fileType: file.type,
+                }),
+              },
+            }),
+          });
+
+          const result = await response.json();
+
+          if (result.tool_result) {
+            const toolResponse = {
+              id: Math.random().toString(),
+              role: "assistant" as const,
+              content: result.tool_result.content,
+            };
+            setMessages([...messages, userMessage, toolResponse]);
+          }
+
+          // Clear the file input
+          setFile(null);
+          if (fileInputRef.current) {
+            fileInputRef.current.value = "";
+          }
+        }
+      };
+
+      reader.readAsDataURL(file);
+    } catch (error) {
+      console.error("Error scanning file:", error);
+      setMessages([
+        ...messages,
+        {
+          id: Math.random().toString(),
+          role: "assistant" as const,
+          content: "There was an error processing your file. Please try again.",
+        },
+      ]);
+    } finally {
+      setIsScanning(false);
+    }
+  };
 
   const formatMessageContent = (content: string) => {
     return content
@@ -57,7 +146,7 @@ export default function Home() {
           </div>
         ))}
 
-        {isLoading && (
+        {(isLoading || isScanning) && (
           <div className="flex items-center space-x-2 p-3 bg-gray-100 rounded-lg max-w-[80%]">
             <div className="w-3 h-3 bg-gray-400 rounded-full animate-bounce" />
             <div
@@ -68,11 +157,49 @@ export default function Home() {
               className="w-3 h-3 bg-gray-400 rounded-full animate-bounce"
               style={{ animationDelay: "0.2s" }}
             />
+            <span className="text-sm text-gray-500">
+              {isScanning ? "Scanning document..." : "Thinking..."}
+            </span>
           </div>
         )}
       </div>
 
       <div className="border-t border-gray-200 pt-4">
+        <div className="mb-4">
+          <div className="flex items-center">
+            <input
+              type="file"
+              ref={fileInputRef}
+              onChange={handleFileChange}
+              accept=".pdf,image/*"
+              className="block w-full text-sm text-gray-500
+                file:mr-4 file:py-2 file:px-4
+                file:rounded-full file:border-0
+                file:text-sm file:font-semibold
+                file:bg-blue-50 file:text-blue-700
+                hover:file:bg-blue-100"
+            />
+
+            <button
+              onClick={handleScanFile}
+              disabled={!file || isScanning}
+              className={`ml-2 px-4 py-2 rounded-full text-sm font-medium ${
+                !file || isScanning
+                  ? "bg-gray-200 text-gray-500 cursor-not-allowed"
+                  : "bg-blue-600 text-white hover:bg-blue-700"
+              }`}
+            >
+              {isScanning ? "Scanning..." : "Scan PII"}
+            </button>
+          </div>
+
+          {file && (
+            <div className="text-sm text-gray-600 mt-1">
+              File selected: {file.name}
+            </div>
+          )}
+        </div>
+
         <form onSubmit={handleSubmit} className="flex items-center">
           <input
             type="text"
