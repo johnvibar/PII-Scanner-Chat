@@ -106,7 +106,3 @@ The tool implementation:
 - Advanced name detection with NLP techniques
 - Support for additional document formats, image as well
 - Customizable PII detection rules
-
-## Potential issues
-
-- We have to create test pdf in the /test/data/05-versions-space.pdf caused by pdf-parse module issue, we might need to find other module to avoid this issue.
