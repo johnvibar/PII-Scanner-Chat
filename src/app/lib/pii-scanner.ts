@@ -1,4 +1,4 @@
-import pdfParse from 'pdf-parse';
+import Pdf from 'pdf-parse/lib/pdf-parse.js';
 
 // Regular expressions for detecting common PII patterns
 const PII_PATTERNS = {
@@ -14,9 +14,9 @@ export async function handlePIIScan(fileData: string, fileName: string, fileType
   try {
     let textContent = '';
     
-    if (fileType.includes('pdf')) {
+    if (fileData && fileType.includes('pdf')) {      
       const dataBuffer = Buffer.from(fileData.split(',')[1], 'base64');
-      const pdfData = await pdfParse(dataBuffer);
+      const pdfData = await Pdf(dataBuffer);
       textContent = pdfData.text;
     } else {
       return `Unsupported file type: ${fileType}. Please upload a PDF or image.`;
